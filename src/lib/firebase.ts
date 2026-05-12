@@ -4,13 +4,13 @@ import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBuJVc5VNjpdrwlIT5JhJ4IVQu6hkBIppE",
-  authDomain: "nextzenshop-4701c.firebaseapp.com",
-  projectId: "nextzenshop-4701c",
-  storageBucket: "nextzenshop-4701c.firebasestorage.app",
-  messagingSenderId: "81585574684",
-  appId: "1:81585574684:web:e7876eb5f4a604ab67a0d9",
-  measurementId: "G-M6YQH2JFBG"
+  apiKey: "AIzaSyBP8lmJm3nkmXxWEQ2956H0WwA-eNHDDJw",
+  authDomain: "gen-lang-client-07072231-38356.firebaseapp.com",
+  projectId: "gen-lang-client-07072231-38356",
+  storageBucket: "gen-lang-client-07072231-38356.firebasestorage.app",
+  messagingSenderId: "456430020016",
+  appId: "1:456430020016:web:821d1288290371f0a6e275",
+  measurementId: "G-2GGBR68GD2"
 };
 
 export const app = initializeApp(firebaseConfig);
