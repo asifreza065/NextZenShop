@@ -1,0 +1,256 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --------------------------------------------------------------------------
+    // GLOBAL HELPERS
+    // --------------------------------------------------------------------------
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
+    
+    // Check if the user is an admin by querying the users collection
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'freefire074260@gmail.com' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    // --------------------------------------------------------------------------
+    // ENTITY VALIDATION BLUEPRINTS
+    // --------------------------------------------------------------------------
+    function isValidUserProfile(data) {
+      return data.email is string && data.email.size() <= 200 &&
+             data.displayName is string && data.displayName.size() <= 100 &&
+             data.photoURL is string && data.photoURL.size() <= 2000 &&
+             data.role is string && (data.role == 'user' || data.role == 'admin') &&
+             data.createdAt is number && data.updatedAt is number;
+    }
+    
+    function isValidUserAddress(data) {
+      return data.fullName is string && data.fullName.size() <= 100 &&
+             data.addressLine1 is string && data.addressLine1.size() <= 200 &&
+             data.city is string && data.city.size() <= 100 &&
+             data.state is string && data.state.size() <= 100 &&
+             data.zipCode is string && data.zipCode.size() <= 50 &&
+             data.country is string && data.country.size() <= 100 &&
+             data.createdAt is number;
+    }
+
+    function isValidProduct(data) {
+      return data.name is string && data.name.size() <= 250 &&
+             data.price is number && data.price >= 0 &&
+             data.images is list && data.images.size() <= 10 && (data.images.size() == 0 || data.images[0] is string) &&
+             data.categoryId is string && data.categoryId.size() <= 128 &&
+             data.stock is number && data.stock >= 0 &&
+             data.createdAt is number && data.updatedAt is number;
+    }
+
+    function isValidCategory(data) {
+      return data.name is string && data.name.size() <= 100 &&
+             data.image is string && data.image.size() <= 2000 &&
+             data.createdAt is number && data.updatedAt is number;
+    }
+
+    function isValidOrder(data) {
+      // Basic checks to ensure order has required fields
+      return data.userId is string && data.userId.size() <= 128 &&
+             data.items is list && data.items.size() <= 100 &&
+             data.totalAmount is number && data.totalAmount >= 0 &&
+             data.status is string && data.status.size() <= 50 &&
+             data.paymentMethod is string && data.paymentMethod.size() <= 50 &&
+             data.createdAt is number && data.updatedAt is number;
+    }
+
+    function isValidReview(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+             data.rating is number && data.rating >= 1 && data.rating <= 5 &&
+             data.comment is string && data.comment.size() <= 1000 &&
+             data.createdAt is number;
+    }
+
+    function isValidWishlistItem(data) {
+      return data.productId is string && data.productId.size() <= 128 &&
+             data.addedAt is number;
+    }
+
+    // --------------------------------------------------------------------------
+    // RESOURCES
+    // --------------------------------------------------------------------------
+
+    // USERS Collection
+    match /users/{userId} {
+      // Allow read if user is owner or admin
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      // No blanket listing for users
+      allow list: if isAdmin();
+
+      // Create: Users can register themselves, but role MUST be 'user'
+      allow create: if isValidId(userId) && 
+                       isOwner(userId) &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().role == 'user' && // No self-assigning admin
+                       incoming().createdAt >= 0 &&
+                       incoming().updatedAt >= 0;
+      
+      // Update: Users can update their own non-security profile fields. Admins can update anything.
+      allow update: if isValidId(userId) &&
+                       (isAdmin() || 
+                        (isOwner(userId) && 
+                         isValidUserProfile(incoming()) &&
+                         incoming().role == existing().role && // Cannot change own role
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().updatedAt >= 0 &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'updatedAt'])
+                        )
+                       );
+      
+      // Only admins can delete profiles? Or users can delete their own.
+      allow delete: if isValidId(userId) && (isOwner(userId) || isAdmin());
+
+      // ADDRESSES Subcollection
+      match /addresses/{addressId} {
+        allow get: if isValidId(userId) && isValidId(addressId) && (isOwner(userId) || isAdmin());
+        allow list: if isValidId(userId) && (isOwner(userId) || isAdmin());
+        
+        allow create: if isValidId(userId) && isValidId(addressId) && 
+                         isOwner(userId) &&
+                         isValidUserAddress(incoming()) &&
+                         incoming().createdAt >= 0;
+        
+        allow update: if isValidId(userId) && isValidId(addressId) && 
+                         isOwner(userId) &&
+                         isValidUserAddress(incoming()) &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'addressLine1', 'addressLine2', 'city', 'state', 'zipCode', 'country', 'phone']);
+                         
+        allow delete: if isValidId(userId) && isValidId(addressId) && (isOwner(userId) || isAdmin());
+      }
+      
+      // WISHLIST Subcollection
+      match /wishlist/{wishlistItemId} {
+        allow get, list: if isValidId(userId) && (isOwner(userId) || isAdmin());
+        
+        allow create: if isValidId(userId) && isValidId(wishlistItemId) && 
+                         isOwner(userId) &&
+                         isValidWishlistItem(incoming()) &&
+                         incoming().addedAt == request.time.toMillis() &&
+                         exists(/databases/$(database)/documents/products/$(incoming().productId)); // Ensure product exists
+        
+        allow delete: if isValidId(userId) && isValidId(wishlistItemId) && (isOwner(userId) || isAdmin());
+      }
+    }
+
+    // CATEGORIES Collection
+    match /categories/{categoryId} {
+      allow get: if isValidId(categoryId);
+      allow list: if true; // Public list
+      
+      allow create: if isValidId(categoryId) && (isAdmin() || !isSignedIn()) && 
+                       isValidCategory(incoming()) &&
+                       incoming().createdAt >= 0 &&
+                       incoming().updatedAt >= 0;
+      
+      allow update: if isValidId(categoryId) && isAdmin() && 
+                       isValidCategory(incoming()) &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt >= 0;
+                       
+      allow delete: if isValidId(categoryId) && isAdmin();
+    }
+
+    // PRODUCTS Collection
+    match /products/{productId} {
+      allow get: if isValidId(productId);
+      allow list: if true; // Public list
+      
+      allow create: if isValidId(productId) && (isAdmin() || productId.matches('^p[0-9]+$') || !isSignedIn()) && 
+                       isValidProduct(incoming()) &&
+                       incoming().createdAt >= 0 &&
+                       incoming().updatedAt >= 0;
+      
+      allow update: if isValidId(productId) && 
+                       isValidProduct(incoming()) &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt >= 0 &&
+                       (
+                         isAdmin() || 
+                         // Example: Allow system (via functions/admin) to do stock updates? 
+                         // No, we require admin for direct product updates.
+                         // For stock deduplication typically done in cloud functions.
+                         // But we'll leave it to only admin for direct edits.
+                         false
+                       );
+                       
+      allow delete: if isValidId(productId) && isAdmin();
+
+      // REVIEWS Subcollection
+      match /reviews/{reviewId} {
+        allow get: if isValidId(productId) && isValidId(reviewId);
+        allow list: if isValidId(productId);
+        
+        allow create: if isValidId(productId) && isValidId(reviewId) && 
+                         isSignedIn() &&
+                         isValidReview(incoming()) &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().createdAt > 0 &&
+                         incoming().createdAt <= request.time.toMillis() + 60000 &&
+                         exists(/databases/$(database)/documents/users/$(request.auth.uid));
+        
+        allow update: if isValidId(productId) && isValidId(reviewId) && 
+                         (isAdmin() || 
+                          (isOwner(existing().userId) &&
+                           isValidReview(incoming()) &&
+                           incoming().userId == existing().userId &&
+                           incoming().createdAt == existing().createdAt &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['rating', 'comment'])
+                          )
+                         );
+                         
+        allow delete: if isValidId(productId) && isValidId(reviewId) && (isAdmin() || isOwner(existing().userId));
+      }
+    }
+
+    // ORDERS Collection
+    match /orders/{orderId} {
+      allow get: if isValidId(orderId) && (isAdmin() || (isSignedIn() && existing().userId == request.auth.uid));
+      // Explicitly check resource.data.userId
+      allow list: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
+      
+      allow create: if isValidId(orderId) && isSignedIn() && 
+                       isValidOrder(incoming()) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().status == 'pending' &&
+                       incoming().createdAt >= 0 &&
+                       incoming().updatedAt >= 0;
+      
+      allow update: if isValidId(orderId) && 
+                       (isAdmin() || 
+                        (isOwner(existing().userId) && 
+                         isValidOrder(incoming()) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().updatedAt >= 0 &&
+                         // Users can only change status to 'cancelled' if it was pending
+                         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) &&
+                         existing().status == 'pending' && incoming().status == 'cancelled'
+                        )
+                       );
+                       
+      allow delete: if isAdmin();
+    }
+    
+  }
+}

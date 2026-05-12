@@ -1,0 +1,136 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "User profile data including role and basic info.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["email", "role", "createdAt", "updatedAt"]
+    },
+    "UserAddress": {
+      "title": "User Address",
+      "description": "Saved shipping address for checkout.",
+      "type": "object",
+      "properties": {
+        "fullName": { "type": "string" },
+        "addressLine1": { "type": "string" },
+        "addressLine2": { "type": "string" },
+        "city": { "type": "string" },
+        "state": { "type": "string" },
+        "zipCode": { "type": "string" },
+        "country": { "type": "string" },
+        "phone": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["fullName", "addressLine1", "city", "state", "zipCode", "country", "createdAt"]
+    },
+    "WishlistItem": {
+      "title": "Wishlist Item",
+      "description": "Product saved to user's wishlist.",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string" },
+        "addedAt": { "type": "number" }
+      },
+      "required": ["productId", "addedAt"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Ecommerce product listed on the store.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "images": { "type": "array" },
+        "categoryId": { "type": "string" },
+        "stock": { "type": "number" },
+        "rating": { "type": "number" },
+        "reviewCount": { "type": "number" },
+        "isFeatured": { "type": "boolean" },
+        "isTrending": { "type": "boolean" },
+        "flashSaleEnd": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["name", "price", "images", "categoryId", "stock", "createdAt", "updatedAt"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Product category",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "image": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["name", "image", "createdAt", "updatedAt"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "User's order",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "items": { "type": "array" },
+        "totalAmount": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "processing", "shipped", "delivered", "cancelled"] },
+        "shippingAddress": { "type": "object" },
+        "paymentMethod": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["userId", "items", "totalAmount", "status", "shippingAddress", "paymentMethod", "createdAt", "updatedAt"]
+    },
+    "Review": {
+      "title": "Product Review",
+      "description": "Product review left by a user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["userId", "rating", "comment", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": { "$ref": "UserProfile" },
+      "description": "User profile collection"
+    },
+    "users/{userId}/addresses/{addressId}": {
+      "schema": { "$ref": "UserAddress" },
+      "description": "User shipping addresses"
+    },
+    "users/{userId}/wishlist/{wishlistItemId}": {
+      "schema": { "$ref": "WishlistItem" },
+      "description": "User wishlist items"
+    },
+    "products/{productId}": {
+      "schema": { "$ref": "Product" },
+      "description": "Public products catalog"
+    },
+    "categories/{categoryId}": {
+      "schema": { "$ref": "Category" },
+      "description": "Product categories catalog"
+    },
+    "orders/{orderId}": {
+      "schema": { "$ref": "Order" },
+      "description": "Orders placed by users"
+    },
+    "products/{productId}/reviews/{reviewId}": {
+      "schema": { "$ref": "Review" },
+      "description": "Reviews for a product"
+    }
+  }
+}
